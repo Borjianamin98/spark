@@ -22,9 +22,7 @@ import java.math.{BigDecimal => JBigDecimal}
 import java.sql.{Date, Timestamp}
 import java.time.{Duration, Instant, LocalDate, Period}
 import java.util.Locale
-
 import scala.collection.JavaConverters.asScalaBufferConverter
-
 import org.apache.parquet.column.statistics.{Statistics => ParquetStatistics}
 import org.apache.parquet.filter2.predicate._
 import org.apache.parquet.filter2.predicate.SparkFilterApi._
@@ -33,9 +31,9 @@ import org.apache.parquet.schema.{GroupType, LogicalTypeAnnotation, MessageType,
 import org.apache.parquet.schema.LogicalTypeAnnotation.{DecimalLogicalTypeAnnotation, TimeUnit}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName._
-
+import org.apache.parquet.schema.Type.Repetition
 import org.apache.spark.sql.catalyst.util.{CaseInsensitiveMap, DateTimeUtils, IntervalUtils}
-import org.apache.spark.sql.catalyst.util.RebaseDateTime.{rebaseGregorianToJulianDays, rebaseGregorianToJulianMicros, RebaseSpec}
+import org.apache.spark.sql.catalyst.util.RebaseDateTime.{RebaseSpec, rebaseGregorianToJulianDays, rebaseGregorianToJulianMicros}
 import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
 import org.apache.spark.sql.sources
 import org.apache.spark.unsafe.types.UTF8String
@@ -64,7 +62,10 @@ class ParquetFilters(
         fields: Seq[Type],
         parentFieldNames: Array[String] = Array.empty): Seq[ParquetPrimitiveField] = {
       fields.flatMap {
-        case p: PrimitiveType =>
+        // Parquet only supports push-down for non-repeated primitive types.
+        // TODO: Remove extra condition when parquet supports repeated columns
+        //       (https://issues.apache.org/jira/browse/PARQUET-34)
+        case p: PrimitiveType if p.getRepetition != Repetition.REPEATED =>
           Some(ParquetPrimitiveField(fieldNames = parentFieldNames :+ p.getName,
             fieldType = ParquetSchemaType(p.getLogicalTypeAnnotation,
               p.getPrimitiveTypeName, p.getTypeLength)))
